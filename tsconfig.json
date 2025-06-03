@@ -1,0 +1,27 @@
+{
+  "compilerOptions": {
+    /* ——————————————————————— language / environment —————————————————————— */
+    "target":            "es2016",
+    "module":            "esnext",          // enables import.meta & modern ESM
+    "moduleResolution":  "node",           // ← ADD THIS
+    "jsx":               "react-jsx",       // new JSX transform
+    "isolatedModules":   true,
+    "noEmit":            true,
+
+    /* ——————————————————————— strictness & quality ———————————————————————— */
+    "strict":            true,
+    "esModuleInterop":   true,
+    "forceConsistentCasingInFileNames": true,
+    "skipLibCheck":      true,
+
+    /* ——————————————————————— resolution helpers ———————————————————————— */
+    "rootDir":           "src",
+    "resolveJsonModule": true,
+    "types":             [
+      "vite/client",     // gives typings for import.meta.env
+      "google.maps"      // we installed @types/google.maps
+    ]
+  },
+
+  "include": ["src/**/*", "src/declarations.d.ts"]
+}
