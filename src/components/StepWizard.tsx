@@ -14,7 +14,7 @@ export default function StepWizard({ step, children }: Props) {
         {children.map((child, i) =>
           i === step && (
             <motion.div
-              key={i}
+              key={`step-${i}`}
               initial={{ x: 40, opacity: 0 }}
               animate={{ x: 0,  opacity: 1 }}
               exit   ={{ x:-40, opacity: 0 }}

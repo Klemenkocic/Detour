@@ -11,9 +11,12 @@
   },
   "dependencies": {
     "@react-google-maps/api": "^2.20.6",
+    "@types/react-date-range": "^1.4.10",
+    "date-fns": "^4.1.0",
     "framer-motion": "^12.15.0",
     "lucide-react": "^0.511.0",
     "react": "^19.1.0",
+    "react-date-range": "^2.0.1",
     "react-dom": "^19.1.0",
     "react-router-dom": "^6.30.1"
   },
