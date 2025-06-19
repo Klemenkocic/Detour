@@ -12,4 +12,91 @@ export type Place = {
     endDate:   string | null;
     mode: 'CAR' | 'RV' | 'PUBLIC';
     budget: number;
+    tripType: 'ONE_WAY' | 'TWO_WAY';
+  }
+
+  // Enhanced trip planning types
+  export interface PopularAttraction {
+    name: string;
+    placeId: string;
+    location: google.maps.LatLngLiteral;
+    rating: number;
+    types: string[];
+    photoUrl?: string;
+    openingHours?: string[];
+    priceLevel?: number;
+    userRatingsTotal?: number;
+  }
+
+  export interface DayItinerary {
+    day: number;
+    date: string;
+    city: string;
+    cityPlaceId: string;
+    location: google.maps.LatLngLiteral;
+    drivingFromPrevious?: {
+      duration: number; // seconds
+      distance: number; // meters
+      startTime: string;
+      arrivalTime: string;
+    };
+    attractions: PopularAttraction[];
+    accommodation?: {
+      name: string;
+      placeId: string;
+      location: google.maps.LatLngLiteral;
+      rating: number;
+      pricePerNight: number;
+      type: string;
+      bookingUrl?: string;
+      photos?: string[];
+    };
+    schedule: {
+      time: string;
+      activity: string;
+      location?: string;
+      duration?: number; // minutes
+      type: 'drive' | 'attraction' | 'meal' | 'accommodation' | 'free';
+    }[];
+  }
+
+  export interface EnhancedTripData {
+    totalDays: number;
+    totalDistance: number; // meters
+    totalDrivingTime: number; // seconds
+    dailyItineraries: DayItinerary[];
+    route: {
+      waypoints: google.maps.LatLngLiteral[];
+      cities: string[];
+    };
+    costs: {
+      accommodation: number;
+      estimated: number;
+      breakdown: { [key: string]: number };
+    };
+    feasible: boolean;
+    warnings: string[];
+    tripSettings: {
+      startCity: string;
+      endCity: string;
+      startDate: string;
+      endDate: string;
+      transportMode: 'CAR' | 'RV' | 'PUBLIC';
+      tripType: 'ONE_WAY' | 'TWO_WAY';
+      budget: number;
+    };
+    carSettings?: {
+      startTime: string;
+      endTime: string;
+      maxDailyHours: number;
+      accommodationType: string;
+    };
+  }
+
+  export interface TripSidebarProps {
+    tripData: EnhancedTripData | null;
+    isVisible: boolean;
+    onClose: () => void;
+    onSettingsChange: (settings: any) => void;
+    onDaySettingsChange: (day: number, settings: any) => void;
   }

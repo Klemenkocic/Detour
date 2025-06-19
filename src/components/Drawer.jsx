@@ -1,4 +1,4 @@
-import { motion } from 'framer-motion';
+import { motion } from 'framer-motion'; // eslint-disable-line no-unused-vars
 
 /** A left-hand slide-in panel.
  *  Props
@@ -6,7 +6,7 @@ import { motion } from 'framer-motion';
  *  open      – boolean (show / hide)
  *  onClose   – () ⇒ void  (called when the backdrop is clicked)
  */
-export default function Drawer({ open, onClose, children }) {
+export default function Drawer({ open, onClose }) {
   return (
     <>
       {/* Backdrop */}

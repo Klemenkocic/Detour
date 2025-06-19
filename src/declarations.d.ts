@@ -3,7 +3,7 @@ declare module '*.jsx' {
     export default C;
   }
   
-  ///  allow “import './something.js'”
+  ///  allow "import './something.js'"
   declare module '*.js' {
     const anyExport: any;
     export = anyExport;
@@ -15,3 +15,11 @@ declare module '*.jsx' {
     const styles: MapTypeStyle[];
     export default styles;
   }
+
+declare global {
+  interface Window {
+    google?: typeof google;
+  }
+}
+
+export {};

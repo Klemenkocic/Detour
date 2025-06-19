@@ -8,8 +8,20 @@ import PlaceInput from '../components/PlaceInput';
 import { TripDraft } from '../types/trip';
 
 interface Props {
-  onClose: () => void;
-  onTripCreated: (route: google.maps.DirectionsResult | null) => void;
+  onClose?: () => void;
+  onTripCreated?: (route: google.maps.DirectionsResult | null, tripDetails?: {
+    tripType: 'ONE_WAY' | 'TWO_WAY';
+    mode: 'CAR' | 'RV' | 'PUBLIC';
+    startDate?: string;
+    endDate?: string;
+    budget?: number;
+    carSettings?: {
+      startTime: string;
+      endTime: string;
+      maxDailyHours: number;
+      accommodationType: string;
+    };
+  }) => void;
 }
 
 export default function TripSetup({ onClose, onTripCreated }: Props) {
@@ -21,6 +33,7 @@ export default function TripSetup({ onClose, onTripCreated }: Props) {
     endDate: '',
     mode: 'CAR',
     budget: 0,
+    tripType: 'ONE_WAY',
   });
 
   const next = () => setStep((s) => Math.min(s + 1, 3));
@@ -61,24 +74,107 @@ export default function TripSetup({ onClose, onTripCreated }: Props) {
       // Create a proper DirectionsRequest to get a real route
       const directionsService = new google.maps.DirectionsService();
       
+      // Map our transport modes to Google Maps travel modes
+      const getTravelMode = (mode: TripDraft['mode']) => {
+        switch (mode) {
+          case 'CAR':
+          case 'RV':
+            return google.maps.TravelMode.DRIVING;
+          case 'PUBLIC':
+            return google.maps.TravelMode.TRANSIT;
+          default:
+            return google.maps.TravelMode.DRIVING;
+        }
+      };
+      
+      const travelMode = getTravelMode(draft.mode);
+      
       directionsService.route(
         {
           origin: draft.start.location,
           destination: draft.end.location,
-          travelMode: google.maps.TravelMode.DRIVING,
+          travelMode: travelMode,
+          // For transit, we can add additional options
+          ...(travelMode === google.maps.TravelMode.TRANSIT && {
+            transitOptions: {
+              departureTime: new Date(), // Current time for real-time transit data
+            }
+          })
         },
         (result, status) => {
           if (status === 'OK' && result) {
-            onTripCreated(result);
+            // Log transit-specific information for public transport
+            if (draft.mode === 'PUBLIC' && result.routes[0]) {
+              console.log('🚌 Transit Route Information:');
+              logTransitDetails(result, draft.tripType);
+            }
+            onTripCreated?.(result, {
+              tripType: draft.tripType,
+              mode: draft.mode,
+              startDate: draft.startDate || '',
+              endDate: draft.endDate || '',
+              budget: draft.budget,
+              carSettings: draft.mode === 'CAR' ? {
+                startTime: '09:00',
+                endTime: '22:00',
+                maxDailyHours: 8,
+                accommodationType: 'hotel'
+              } : undefined
+            });
           } else {
             console.error('Directions request failed due to', status);
             // Still call the callback with null to indicate failure
-            onTripCreated(null);
+            onTripCreated?.(null);
           }
-          onClose();
+          onClose?.();
         }
       );
     }
+  };
+
+  // Helper function to log transit details and calculate trip information
+  const logTransitDetails = (result: google.maps.DirectionsResult, tripType: 'ONE_WAY' | 'TWO_WAY') => {
+    const route = result.routes[0];
+    const leg = route.legs[0];
+    
+    console.log('📍 Route Overview:');
+    console.log(`From: ${leg.start_address}`);
+    console.log(`To: ${leg.end_address}`);
+    console.log(`Distance: ${leg.distance?.text}`);
+    console.log(`Duration: ${leg.duration?.text}`);
+    
+    // Calculate total trip time and distance for one-way vs two-way
+    const oneWayDuration = leg.duration?.value || 0; // in seconds
+    const oneWayDistance = leg.distance?.value || 0; // in meters
+    
+    const totalDuration = tripType === 'TWO_WAY' ? oneWayDuration * 2 : oneWayDuration;
+    const totalDistance = tripType === 'TWO_WAY' ? oneWayDistance * 2 : oneWayDistance;
+    
+    console.log('🔄 Trip Calculation:');
+    console.log(`Trip Type: ${tripType}`);
+    console.log(`Total Duration: ${Math.round(totalDuration / 60)} minutes`);
+    console.log(`Total Distance: ${Math.round(totalDistance / 1000)} km`);
+    
+    // Log transit steps
+    console.log('🚍 Transit Steps:');
+    leg.steps.forEach((step, index) => {
+      if (step.travel_mode === 'TRANSIT' && step.transit) {
+        console.log(`Step ${index + 1}: ${step.transit.line?.name || 'Transit'}`);
+        console.log(`  Vehicle: ${step.transit.line?.vehicle?.name || step.transit.line?.vehicle?.type}`);
+        console.log(`  From: ${step.transit.departure_stop?.name}`);
+        console.log(`  To: ${step.transit.arrival_stop?.name}`);
+        console.log(`  Duration: ${step.duration?.text}`);
+        if (step.transit.departure_time) {
+          console.log(`  Departure: ${step.transit.departure_time.text}`);
+        }
+        if (step.transit.arrival_time) {
+          console.log(`  Arrival: ${step.transit.arrival_time.text}`);
+        }
+      } else if (step.travel_mode === 'WALKING') {
+        console.log(`Step ${index + 1}: Walk ${step.duration?.text} (${step.distance?.text})`);
+        console.log(`  Instructions: ${step.instructions?.replace(/<[^>]*>/g, '')}`);
+      }
+    });
   };
 
   return (
@@ -102,7 +198,7 @@ export default function TripSetup({ onClose, onTripCreated }: Props) {
       >
         <header className="p-5 border-b dark:border-zinc-700 flex justify-between">
           <h2 className="text-2xl font-semibold">Create Trip</h2>
-          <button onClick={onClose} className="rounded p-1 hover:bg-zinc-200 dark:hover:bg-zinc-800">
+          <button onClick={() => onClose?.()} className="rounded p-1 hover:bg-zinc-200 dark:hover:bg-zinc-800">
             <X size={20} />
           </button>
         </header>
@@ -165,6 +261,18 @@ export default function TripSetup({ onClose, onTripCreated }: Props) {
               </label>
 
               <label className="block">
+                <span className="text-sm font-medium">Trip Type</span>
+                <select
+                  className="w-full mt-1 px-3 py-2 border rounded-md dark:bg-zinc-800"
+                  onChange={(e) => setDraft({ ...draft, tripType: e.target.value as TripDraft['tripType'] })}
+                  value={draft.tripType}
+                >
+                  <option value="ONE_WAY">One Way</option>
+                  <option value="TWO_WAY">Two Way</option>
+                </select>
+              </label>
+
+              <label className="block">
                 <span className="text-sm font-medium">Budget (€)</span>
                 <div className="relative">
                   <input
@@ -175,7 +283,7 @@ export default function TripSetup({ onClose, onTripCreated }: Props) {
                     value={draft.budget || ''}
                   />
                   <span className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500 pointer-events-none">
-                    $
+                    €
                   </span>
                 </div>
               </label>
