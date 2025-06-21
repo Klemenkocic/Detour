@@ -4,23 +4,23 @@
 import {
   GoogleMap,
   Marker,
-  DirectionsService,
   DirectionsRenderer,
   useLoadScript,
 } from '@react-google-maps/api';
 import { useEffect, useState } from 'react';
 import type { Library } from '@googlemaps/js-api-loader';
 
+// @ts-ignore
 import detourStyle from './detourMapStyle.js';
+// @ts-ignore
 import MapOverlay from './MapOverlay.jsx';
+// @ts-ignore
 import HeaderBar from './HeaderBar.jsx';
-import Drawer from './Drawer.jsx';
 import TripSetup from '../pages/TripSetup';
 import TransitInfo from './TransitInfo';
-import CarTripInfo from './CarTripInfo';
-import TripSidebar from './TripSidebar';
-import { EnhancedTripPlanner } from './EnhancedTripPlanner';
-import { EnhancedTripData } from '../types/trip';
+import TripSidebarV2 from './TripSidebarV2';
+import { TripPlanningOrchestrator } from '../services/TripPlanningOrchestrator';
+import { TripRequest, TripPlan } from '../types/trip';
 
 const libraries: Library[] = ['places'];
 
@@ -31,16 +31,12 @@ export default function Map() {
   });
 
   const [userPos, setUserPos] = useState<google.maps.LatLngLiteral | null>(null);
-  const [route, setRoute] = useState<google.maps.DirectionsResult | null>(null);
-  const [drawerOpen, setDrawerOpen] = useState(false);
   const [wizardOpen, setWizardOpen] = useState(false);
   const [transitInfoVisible, setTransitInfoVisible] = useState(false);
-  const [carTripInfoVisible, setCarTripInfoVisible] = useState(false);
-  
-  // Enhanced trip planning state
   const [tripSidebarVisible, setTripSidebarVisible] = useState(false);
-  const [enhancedTripData, setEnhancedTripData] = useState<EnhancedTripData | null>(null);
-  const [tripPlanner] = useState(() => new EnhancedTripPlanner());
+  const [currentTripPlan, setCurrentTripPlan] = useState<TripPlan | null>(null);
+  const [tripPlanner] = useState(() => new TripPlanningOrchestrator());
+  const [directionsRenderers, setDirectionsRenderers] = useState<google.maps.DirectionsRenderer[]>([]);
   
   const [lastTrip, setLastTrip] = useState<{
     route: google.maps.DirectionsResult;
@@ -49,12 +45,6 @@ export default function Map() {
     startDate: string;
     endDate: string;
     budget: number;
-    carSettings?: {
-      startTime: string;
-      endTime: string;
-      maxDailyHours: number;
-      accommodationType: string;
-    };
   } | null>(null);
 
   useEffect(() => {
@@ -68,85 +58,81 @@ export default function Map() {
       (error) => {
         console.log('📍 Location access denied or failed, defaulting to Munich');
         console.log('Error:', error.message);
-        // Don't set userPos, let it remain null to use Munich as fallback
       },
       { enableHighAccuracy: true, timeout: 10_000 }
     );
   }, [isLoaded]);
 
-  // Calculate enhanced trip when a new car trip is created
+  // Plan enhanced trip when a new car trip is created
   useEffect(() => {
     if (lastTrip && lastTrip.mode === 'CAR' && lastTrip.route) {
-      calculateEnhancedTrip();
+      planEnhancedTrip();
     }
   }, [lastTrip]);
 
-  const calculateEnhancedTrip = async () => {
+  const planEnhancedTrip = async () => {
     if (!lastTrip || !lastTrip.route) return;
     
     try {
-      console.log('🚗 Calculating enhanced trip with full duration planning...');
+      console.log('🚗 Planning enhanced trip...');
       
-      const enhancedData = await tripPlanner.calculateEnhancedTrip(lastTrip.route, {
-        tripType: lastTrip.tripType,
-        mode: lastTrip.mode,
+      const leg = lastTrip.route.routes[0].legs[0];
+      const request: TripRequest = {
+        origin: leg.start_address || '',
+        destination: leg.end_address || '',
         startDate: lastTrip.startDate,
         endDate: lastTrip.endDate,
-        budget: lastTrip.budget,
-        carSettings: lastTrip.carSettings
-      });
+        mode: lastTrip.mode,
+        budget: lastTrip.budget
+      };
       
-      setEnhancedTripData(enhancedData);
+      const tripPlan = await tripPlanner.planTrip(request);
+      setCurrentTripPlan(tripPlan);
       setTripSidebarVisible(true);
       
-      // Hide old overlays when showing enhanced sidebar
-      setCarTripInfoVisible(false);
-      setTransitInfoVisible(false);
+      // Clear old renderers
+      directionsRenderers.forEach(renderer => renderer.setMap(null));
+      setDirectionsRenderers([]);
       
-      console.log('✅ Enhanced trip calculated:', enhancedData);
+      // Display segmented routes on map
+      displaySegmentedRoutes(tripPlan);
+      
+      console.log('✅ Enhanced trip planned:', tripPlan);
     } catch (error) {
-      console.error('❌ Error calculating enhanced trip:', error);
+      console.error('❌ Error planning enhanced trip:', error);
     }
   };
 
-  const handleTripSettingsChange = async (newSettings: any) => {
-    if (!lastTrip) return;
+  const displaySegmentedRoutes = (tripPlan: TripPlan) => {
+    if (!window.google?.maps) return;
     
-    // Update last trip with new settings
-    const updatedTrip = {
-      ...lastTrip,
-      startDate: newSettings.startDate || lastTrip.startDate,
-      endDate: newSettings.endDate || lastTrip.endDate,
-      budget: newSettings.budget || lastTrip.budget
-    };
+    const newRenderers: google.maps.DirectionsRenderer[] = [];
     
-    setLastTrip(updatedTrip);
+    // Create a renderer for each segment
+    tripPlan.segments.forEach((segment, index) => {
+      if (segment.googleRoute) {
+        const renderer = new google.maps.DirectionsRenderer({
+          directions: segment.googleRoute,
+          suppressMarkers: true, // We'll add custom markers
+          preserveViewport: index > 0, // Only fit first segment
+          polylineOptions: {
+            strokeColor: '#3B82F6',
+            strokeWeight: 6,
+            strokeOpacity: 0.8
+          }
+        });
+        
+                  renderer.setMap((window as any).map);
+          newRenderers.push(renderer);
+      }
+    });
     
-    // Recalculate enhanced trip with new settings
-    if (updatedTrip.route) {
-      const enhancedData = await tripPlanner.calculateEnhancedTrip(updatedTrip.route, {
-        tripType: updatedTrip.tripType,
-        mode: updatedTrip.mode,
-        startDate: updatedTrip.startDate,
-        endDate: updatedTrip.endDate,
-        budget: updatedTrip.budget,
-        carSettings: updatedTrip.carSettings
-      });
-      
-      setEnhancedTripData(enhancedData);
-    }
-  };
-
-  const handleDaySettingsChange = (day: number, settings: any) => {
-    // Handle day-specific settings changes
-    console.log(`Day ${day} settings changed:`, settings);
-    // This will be implemented when we add day-level customization
+    setDirectionsRenderers(newRenderers);
   };
 
   if (loadError) return <p className="p-4 text-red-500">Error loading Google Maps API</p>;
   if (!isLoaded) return <p className="p-4">Loading Maps…</p>;
 
-  // Munich coordinates: 48.1351° N, 11.5820° E
   const center = userPos ?? { lat: 48.1351, lng: 11.5820 };
 
   const mapOptions: google.maps.MapOptions = {
@@ -158,15 +144,17 @@ export default function Map() {
   return (
     <div className="relative w-full h-screen">
       {/* Enhanced Trip Sidebar */}
-      {tripSidebarVisible && enhancedTripData && (
-        <TripSidebar
-          tripData={enhancedTripData}
-          isVisible={tripSidebarVisible}
-          onClose={() => setTripSidebarVisible(false)}
-          onSettingsChange={handleTripSettingsChange}
-          onDaySettingsChange={handleDaySettingsChange}
-        />
-      )}
+      <TripSidebarV2
+        tripPlan={currentTripPlan}
+        isVisible={tripSidebarVisible}
+        onClose={() => setTripSidebarVisible(false)}
+        onUpdateTrip={(updatedPlan) => {
+          setCurrentTripPlan(updatedPlan);
+          console.log('✅ Trip updated:', updatedPlan);
+          // Re-display routes with updated plan
+          displaySegmentedRoutes(updatedPlan);
+        }}
+      />
 
       {/* Map with adjusted margin when sidebar is visible */}
       <div className={`w-full h-full transition-all duration-300 ${tripSidebarVisible ? 'ml-96' : ''}`}>
@@ -175,6 +163,10 @@ export default function Map() {
           center={center}
           zoom={userPos ? 13 : 10}
           options={mapOptions}
+          onLoad={(map) => {
+            // Store map instance globally for DirectionsRenderer
+            (window as any).map = map;
+          }}
         >
           {userPos && (
             <Marker
@@ -190,57 +182,56 @@ export default function Map() {
               }}
             />
           )}
-
-          {route && <DirectionsRenderer directions={route} />}
           
-          {/* Enhanced trip waypoint markers */}
-          {enhancedTripData && enhancedTripData.dailyItineraries.map((day, index) => (
-            <Marker
-              key={`day-${day.day}`}
-              position={day.location}
-              title={`Day ${day.day} - ${day.city}`}
-              icon={{
-                path: window.google.maps.SymbolPath.CIRCLE,
-                scale: 12,
-                fillColor: index === 0 ? '#10b981' : index === enhancedTripData.dailyItineraries.length - 1 ? '#ef4444' : '#3b82f6',
-                fillOpacity: 1,
-                strokeWeight: 2,
-                strokeColor: '#fff',
-              }}
-              label={{
-                text: day.day.toString(),
-                color: '#fff',
-                fontSize: '12px',
-                fontWeight: 'bold'
-              }}
-            />
-          ))}
+          {/* City markers */}
+          {currentTripPlan && currentTripPlan.cities.map((city, index) => {
+            const stay = currentTripPlan.cityStays.find(s => s.city.name === city.name);
+            const isStartCity = index === 0;
+            const isEndCity = index === currentTripPlan.cities.length - 1;
+            
+            return (
+              <Marker
+                key={`city-${index}`}
+                position={city.location}
+                title={`${city.name}${stay && stay.days > 0 ? ` (${stay.days} days)` : isStartCity ? ' (Start)' : isEndCity ? ' (End)' : ''}`}
+                icon={{
+                  path: window.google.maps.SymbolPath.CIRCLE,
+                  scale: 15,
+                  fillColor: isStartCity ? '#10b981' : isEndCity ? '#ef4444' : '#3b82f6',
+                  fillOpacity: 1,
+                  strokeWeight: 3,
+                  strokeColor: '#fff',
+                }}
+                label={{
+                  text: stay && stay.days > 0 ? stay.days.toString() : isStartCity ? 'S' : isEndCity ? 'E' : '0',
+                  color: '#fff',
+                  fontSize: '12px',
+                  fontWeight: 'bold'
+                }}
+              />
+            );
+          })}
         </GoogleMap>
       </div>
 
       <MapOverlay>
         <HeaderBar
-          toggleDrawer={() => setDrawerOpen((o) => !o)}
           openWizard={() => setWizardOpen(true)}
           showTransitInfo={() => setTransitInfoVisible(true)}
           hasTransitRoute={lastTrip?.mode === 'PUBLIC'}
           showCarTripInfo={() => {
-            if (enhancedTripData && lastTrip?.mode === 'CAR') {
-              setTripSidebarVisible(true);
-            } else {
-              setCarTripInfoVisible(true);
+            if (currentTripPlan && lastTrip?.mode === 'CAR') {
+              setTripSidebarVisible(!tripSidebarVisible);
             }
           }}
           hasCarRoute={lastTrip?.mode === 'CAR'}
         />
       </MapOverlay>
 
-      <Drawer open={drawerOpen} onClose={() => setDrawerOpen(false)} />
       {wizardOpen && (
         <TripSetup 
           onClose={() => setWizardOpen(false)} 
           onTripCreated={(route, tripDetails) => {
-            setRoute(route);
             if (route && tripDetails) {
               setLastTrip({
                 route,
@@ -248,15 +239,11 @@ export default function Map() {
                 mode: tripDetails.mode,
                 startDate: tripDetails.startDate || '',
                 endDate: tripDetails.endDate || '',
-                budget: tripDetails.budget || 0,
-                carSettings: tripDetails.carSettings
+                budget: tripDetails.budget || 0
               });
-              // Show appropriate info based on transport mode
+              
               if (tripDetails.mode === 'PUBLIC') {
                 setTransitInfoVisible(true);
-              } else if (tripDetails.mode === 'CAR') {
-                // Enhanced trip calculation will be triggered by useEffect
-                console.log('🚗 Car trip created, will calculate enhanced itinerary...');
               }
             }
           }} 
@@ -270,37 +257,6 @@ export default function Map() {
           tripType={lastTrip.tripType}
           isVisible={transitInfoVisible && lastTrip.mode === 'PUBLIC'}
           onClose={() => setTransitInfoVisible(false)}
-        />
-      )}
-
-      {/* Legacy Car Trip Info Overlay (fallback) */}
-      {lastTrip && lastTrip.mode === 'CAR' && lastTrip.carSettings && !enhancedTripData && (
-        <CarTripInfo
-          route={lastTrip.route}
-          tripSettings={{
-            startTime: lastTrip.carSettings.startTime,
-            endTime: lastTrip.carSettings.endTime,
-            maxDailyHours: lastTrip.carSettings.maxDailyHours,
-            accommodationType: lastTrip.carSettings.accommodationType,
-            budget: lastTrip.budget,
-            tripType: lastTrip.tripType,
-            startDate: lastTrip.startDate,
-            endDate: lastTrip.endDate
-          }}
-          isVisible={carTripInfoVisible}
-          onClose={() => setCarTripInfoVisible(false)}
-          onSettingsChange={(newSettings) => {
-            // Update trip settings and recalculate
-            if (lastTrip) {
-              setLastTrip({
-                ...lastTrip,
-                carSettings: {
-                  ...lastTrip.carSettings!,
-                  ...newSettings
-                }
-              });
-            }
-          }}
         />
       )}
     </div>

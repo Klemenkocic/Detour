@@ -75,3 +75,17 @@ button:focus-visible {
     background-color: #f9f9f9;
   }
 }
+
+/* Hide scrollbar for tab navigation */
+.scrollbar-hide {
+  -ms-overflow-style: none;  /* IE and Edge */
+  scrollbar-width: none;  /* Firefox */
+}
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;  /* Chrome, Safari and Opera */
+}
+
+/* Ensure modals appear above everything */
+.fixed {
+  position: fixed;
+}

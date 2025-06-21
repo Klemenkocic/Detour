@@ -100,3 +100,69 @@ export type Place = {
     onSettingsChange: (settings: any) => void;
     onDaySettingsChange: (day: number, settings: any) => void;
   }
+
+// Core types for the trip planning system
+export interface City {
+  name: string;
+  location: google.maps.LatLngLiteral;
+  population: number;
+  country: string;
+  importance: number; // 0-300 score based on population and tourist value
+}
+
+export interface RouteSegment {
+  from: City;
+  to: City;
+  googleRoute: google.maps.DirectionsResult | null;
+  distance: number; // meters
+  duration: number; // seconds
+  segmentIndex: number;
+}
+
+export interface CityStay {
+  city: City;
+  days: number;
+  startDay: number;
+  endDay: number;
+}
+
+export interface TripPlan {
+  cities: City[];
+  segments: RouteSegment[];
+  cityStays: CityStay[];
+  totalDays: number;
+  totalDistance: number; // meters
+  totalDrivingTime: number; // seconds
+  startDate: Date;
+  endDate: Date;
+}
+
+export interface TripRequest {
+  origin: string;
+  destination: string;
+  startDate: string;
+  endDate: string;
+  mode: 'CAR' | 'RV' | 'PUBLIC';
+  budget: number;
+}
+
+// API Response types
+export interface OpenDataSoftCity {
+  name: string;
+  ascii_name: string;
+  coordinates: {
+    lat: number;
+    lon: number;
+  };
+  population: number;
+  cou_name_en: string;
+  timezone: string;
+}
+
+// UI State types
+export interface TripPlannerState {
+  isLoading: boolean;
+  error: string | null;
+  currentTripPlan: TripPlan | null;
+  selectedCityIndex: number | null;
+}
