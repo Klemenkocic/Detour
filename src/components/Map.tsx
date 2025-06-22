@@ -20,7 +20,8 @@ import TripSetup from '../pages/TripSetup';
 import TransitInfo from './TransitInfo';
 import TripSidebarV2 from './TripSidebarV2';
 import { TripPlanningOrchestrator } from '../services/TripPlanningOrchestrator';
-import { TripRequest, TripPlan } from '../types/trip';
+import { TripRequest } from '../types/trip';
+import { useTripPlan, setTripPlan } from '../store/tripStore';
 
 const libraries: Library[] = ['places'];
 
@@ -34,7 +35,7 @@ export default function Map() {
   const [wizardOpen, setWizardOpen] = useState(false);
   const [transitInfoVisible, setTransitInfoVisible] = useState(false);
   const [tripSidebarVisible, setTripSidebarVisible] = useState(false);
-  const [currentTripPlan, setCurrentTripPlan] = useState<TripPlan | null>(null);
+  const currentTripPlan = useTripPlan();
   const [tripPlanner] = useState(() => new TripPlanningOrchestrator());
   const [directionsRenderers, setDirectionsRenderers] = useState<google.maps.DirectionsRenderer[]>([]);
   
@@ -87,7 +88,7 @@ export default function Map() {
       };
       
       const tripPlan = await tripPlanner.planTrip(request);
-      setCurrentTripPlan(tripPlan);
+      setTripPlan(tripPlan);
       setTripSidebarVisible(true);
       
       // Clear old renderers
@@ -103,13 +104,13 @@ export default function Map() {
     }
   };
 
-  const displaySegmentedRoutes = (tripPlan: TripPlan) => {
+  const displaySegmentedRoutes = (tripPlan: any) => {
     if (!window.google?.maps) return;
     
     const newRenderers: google.maps.DirectionsRenderer[] = [];
     
     // Create a renderer for each segment
-    tripPlan.segments.forEach((segment, index) => {
+    tripPlan.segments.forEach((segment: any, index: number) => {
       if (segment.googleRoute) {
         const renderer = new google.maps.DirectionsRenderer({
           directions: segment.googleRoute,
@@ -145,15 +146,8 @@ export default function Map() {
     <div className="relative w-full h-screen">
       {/* Enhanced Trip Sidebar */}
       <TripSidebarV2
-        tripPlan={currentTripPlan}
         isVisible={tripSidebarVisible}
         onClose={() => setTripSidebarVisible(false)}
-        onUpdateTrip={(updatedPlan) => {
-          setCurrentTripPlan(updatedPlan);
-          console.log('✅ Trip updated:', updatedPlan);
-          // Re-display routes with updated plan
-          displaySegmentedRoutes(updatedPlan);
-        }}
       />
 
       {/* Map with adjusted margin when sidebar is visible */}
@@ -184,8 +178,8 @@ export default function Map() {
           )}
           
           {/* City markers */}
-          {currentTripPlan && currentTripPlan.cities.map((city, index) => {
-            const stay = currentTripPlan.cityStays.find(s => s.city.name === city.name);
+          {currentTripPlan && currentTripPlan.cities.map((city: any, index: number) => {
+            const stay = currentTripPlan.cityStays.find((s: any) => s.city.name === city.name);
             const isStartCity = index === 0;
             const isEndCity = index === currentTripPlan.cities.length - 1;
             
