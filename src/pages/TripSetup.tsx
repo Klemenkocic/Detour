@@ -25,14 +25,21 @@ interface Props {
 }
 
 export default function TripSetup({ onClose, onTripCreated }: Props) {
+  // Calculate default dates
+  const today = new Date();
+  const startDateDefault = new Date(today);
+  startDateDefault.setMonth(today.getMonth() + 1);
+  const endDateDefault = new Date(startDateDefault);
+  endDateDefault.setDate(startDateDefault.getDate() + 14);
+
   const [step, setStep] = useState(0);
   const [draft, setDraft] = useState<TripDraft>({
     start: null,
     end: null,
-    startDate: '',
-    endDate: '',
+    startDate: startDateDefault.toISOString().slice(0, 10),
+    endDate: endDateDefault.toISOString().slice(0, 10),
     mode: 'CAR',
-    budget: 0,
+    budget: 450,
     tripType: 'ONE_WAY',
   });
 

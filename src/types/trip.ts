@@ -127,6 +127,7 @@ export interface CityStay {
 }
 
 export interface TripPlan {
+  id?: string;
   cities: City[];
   segments: RouteSegment[];
   cityStays: CityStay[];
@@ -135,6 +136,7 @@ export interface TripPlan {
   totalDrivingTime: number; // seconds
   startDate: Date;
   endDate: Date;
+  premium?: boolean;
 }
 
 export interface TripRequest {

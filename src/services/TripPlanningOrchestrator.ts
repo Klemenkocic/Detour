@@ -80,6 +80,7 @@ export class TripPlanningOrchestrator {
       const totalDrivingTime = segments.reduce((sum, seg) => sum + seg.duration, 0);
       
       const tripPlan: TripPlan = {
+        id: crypto.randomUUID(),
         cities: optimalRoute,
         segments,
         cityStays,

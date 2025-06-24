@@ -1,12 +1,16 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { X, Calendar, MapPin, Edit2, Check, XCircle, AlertCircle, Search } from 'lucide-react';
+import { X, Calendar, MapPin, Edit2, Check, XCircle, AlertCircle, Search, Heart, Info, Navigation, Home } from 'lucide-react';
 import { City, TripPlan, CityStay } from '../types/trip';
 import { CityDiscoveryService } from '../services/CityDiscoveryService';
 import { useTripPlan, setTripPlan } from '../store/tripStore';
 import TabContainer from './TabContainer';
 import DayTab from './DayTab';
 import DistanceWarningModal from './DistanceWarningModal';
+import { unlockTrip } from '../hooks/useUnlockTrip';
+import { useAuth } from '../contexts/AuthContext';
+import { signInAnonymously } from 'firebase/auth';
+import { auth } from '../config/firebase';
 
 interface TripSidebarV2Props {
   isVisible: boolean;
@@ -15,6 +19,7 @@ interface TripSidebarV2Props {
 
 export default function TripSidebarV2({ isVisible, onClose }: TripSidebarV2Props) {
   const tripPlan = useTripPlan();
+  const { currentUser, signInAnonymous, getIdToken } = useAuth();
   const [activeTab, setActiveTab] = useState('overview');
   const [editingCity, setEditingCity] = useState<string | null>(null);
   const [editingCityName, setEditingCityName] = useState<string | null>(null);
@@ -217,6 +222,54 @@ export default function TripSidebarV2({ isVisible, onClose }: TripSidebarV2Props
     }
   });
 
+  const unlockTripHandler = async () => {
+    try {
+      console.log('🔐 Starting unlock trip process...');
+      console.log('📍 Trip ID:', tripPlan?.id);
+      console.log('📍 Firebase Auth initialized:', !!auth);
+      console.log('📍 Current user:', auth?.currentUser);
+      console.log('📍 Current user UID:', auth?.currentUser?.uid);
+      
+      // Check if user is authenticated
+      if (!auth?.currentUser) {
+        console.log('User not authenticated, signing in anonymously...');
+        try {
+          const userCredential = await signInAnonymously(auth);
+          console.log('✅ Anonymous sign-in successful:', userCredential.user.uid);
+        } catch (authError: any) {
+          console.error('❌ Failed to sign in anonymously:', authError);
+          console.error('Error code:', authError.code);
+          console.error('Error message:', authError.message);
+          
+          // Check if it's an API key error
+          if (authError.code === 'auth/api-key-not-valid') {
+            alert('Firebase configuration error. Please contact support.');
+            return;
+          }
+          
+          alert('Authentication failed. Please try again.');
+          return;
+        }
+      }
+
+      console.log('🎫 Calling unlockTrip hook...');
+      const idToken = await auth.currentUser?.getIdToken();
+      if (!idToken) {
+        throw new Error('Failed to get authentication token');
+      }
+      await unlockTrip(tripPlan?.id || '', idToken);
+      console.log('✅ Unlock trip completed');
+    } catch (error: any) {
+      console.error('❌ Failed to unlock trip:', error);
+      console.error('Error details:', {
+        message: error.message,
+        code: error.code,
+        stack: error.stack
+      });
+      console.error('Failed to unlock trip. Please try again.');
+    }
+  };
+
   return (
     <motion.div
       initial={{ x: -400 }}
@@ -257,8 +310,33 @@ export default function TripSidebarV2({ isVisible, onClose }: TripSidebarV2Props
       {/* Content */}
       <div className="flex-1 overflow-y-auto">
         {activeTab === 'overview' ? (
-          <div className="p-4">
-            <p className="text-gray-600">Overview content placeholder</p>
+          <div className="p-4 space-y-4">
+            <h3 className="text-lg font-semibold">Trip Overview</h3>
+            
+            {/* Debug information - remove in production */}
+            {import.meta.env.DEV && (
+              <div className="bg-gray-100 p-2 rounded text-xs">
+                <p>Trip ID: {tripPlan?.id || 'No ID'}</p>
+                <p>Premium: {tripPlan?.premium ? 'Yes' : 'No'}</p>
+                <p>Auth State: {auth?.currentUser ? 'Authenticated' : 'Not authenticated'}</p>
+              </div>
+            )}
+            
+            {tripPlan && !tripPlan.premium && (
+              <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+                <h4 className="font-semibold mb-2">🔒 Premium Features</h4>
+                <p className="text-sm text-gray-600 mb-3">
+                  Unlock premium features for this trip including detailed itineraries, 
+                  offline access, and more!
+                </p>
+                <button
+                  onClick={unlockTripHandler}
+                  className="w-full bg-yellow-500 hover:bg-yellow-600 text-white font-semibold py-2 px-4 rounded transition-colors"
+                >
+                  Unlock Trip - €4.99
+                </button>
+              </div>
+            )}
           </div>
         ) : (
           (() => {
